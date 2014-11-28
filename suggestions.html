@@ -1,0 +1,167 @@
+<html xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="en-US">
+<head profile="http://gmpg.org/xfn/11">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>TOSback 2</title>
+
+	<script src="rez/js/jquery-1.10.2.min.js"></script>
+	<script src="rez/js/jquery.cookie.js"></script> <!--https://github.com/carhartl/jquery-cookie -->
+	<script src="rez/js/jquery-uir-1.10.3.min.js"></script>
+
+	<script src="rez/js/sites.js" type="text/javascript"></script>
+	<script src="rez/js/tosback2.js"></script>
+	<script src="rez/js/isocmanager.js"></script>
+	
+	<link rel="stylesheet" href="rez/css/isocmanager.css" type="text/css"/>
+	<link rel="stylesheet" href="rez/css/style.css" type="text/css"/>
+</head>
+<body>
+<div id="container">
+
+	<div id="page">
+		<div id="header"><div id="headerInner"><h1>TOSback<sup>2</sup></h1></div></div>
+    
+		<div id="main">
+		
+			<div id="content">       
+		
+				<div id="pageIntro">
+					<h2>Suggested Policies</h2>
+					<p>These policies were submitted and have not yet been vetted or added to the TOSBack2 rules.</p>
+				</div>        
+
+
+				<div id="SuggestionList"></div>				
+
+
+      
+
+
+			</div>
+			<!-- end content -->
+			
+		</div>
+		<!--end main-->
+				
+	</div>
+	<!-- end page -->		
+		
+	<div id="footer">
+		<div id="footerarea"><span>&copy; 2014.  All rights reserved.</span></div>
+		<div id="LogoContainer">
+			<a href="https://eff.org"><img src="rez/img/eff-logo-plain-rgb.png" /></a>
+			<a href="https://isoc.org"><img src="rez/img/isoc_logo_rgbblue_tp.png"/></a>
+		</div>
+	</div>
+
+</div> 
+<!-- end container -->    
+<style>
+input.url {
+	width:50%;
+}
+button {
+	border:none;
+	margin-left:10px;	
+}
+button.view {
+	background-color:blue;
+	color:white;
+}
+button.delete {
+	background-color:red;
+	color:white;
+}
+button.add {
+	background-color:green;
+	color:white;
+}
+
+</style>
+<script>
+$(function() {
+	AccountPanel.i();
+	AccountPanel.suggestions(function(data){
+		console.log(data);
+		if(data.domains){
+			for(var d=data.domains.length-1;d>=0;d--){			
+			
+				var row = $('<div>', {			
+					html: $('<h3>', { text: data.domains[d].domainName })					
+				});
+				
+				if(data.domains[d].docs){
+					for(var p=0,pp=data.domains[d].docs.length;p<pp;p++){
+						if(data.domains[d].docs[p].status!='live') {
+							var form = $('<form>', { action: '/save', method: 'POST' });						
+							var docType = $('<input>', {
+								type: 'text',
+								name: 'policyName',
+								value: 'Privacy Policy'
+							}); 
+
+							var docUrlInput = $('<input>', {
+								type: 'text',
+								name: 'url',
+								class: 'url',
+								value: data.domains[d].docs[p].docURL
+							}); 
+							var viewButton = $('<button>', {
+								click: function(e){
+									e.preventDefault();
+									window.open(this.form.url.value);
+								},
+								text: 'view',
+								class: 'view'							
+							});
+							var deleteButton = $('<button>', {
+								'data-domain-id': data.domains[d]._id,
+								'data-doc-id': data.domains[d].docs[p]._id,
+								click: function(e){
+									e.preventDefault();
+									if(confirm('Are you sure that this suggestion should be deleted?')){									
+										AccountPanel.removeSuggestion($(this).attr('data-domain-id'),$(this).attr('data-doc-id'), function(){										
+											console.log("removed");
+										});
+									}
+								},
+								text: 'delete',
+								class: 'delete'							
+							});
+							var addRuleButton = $('<button>', {
+								'data-domain-id': data.domains[d]._id,
+								'data-doc-id': data.domains[d].docs[p]._id,
+								click: function(e){
+									e.preventDefault();
+									AccountPanel.createRuleFromSuggestion(
+										$(this).attr('data-domain-id'),
+										$(this).attr('data-doc-id'), 
+										this.form.url.value, 
+										this.form.policyName.value, 
+										function(){										
+											console.log("added");
+										});
+										
+								},
+								text: 'add rule',
+								class: 'add'							
+							});
+							form.append(docType);																		
+							form.append(docUrlInput);												
+							form.append(viewButton);
+							form.append(deleteButton);
+							form.append(addRuleButton);
+							row.append(form);		
+						}			
+					}
+				}
+				
+										
+				row.appendTo('#SuggestionList');
+			}
+		}	
+	});
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,650 @@
+<!DOCTYPE>
+  <html>
+	<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+	<title>TOSBack2 - </title>
+
+
+    <script src="rez/js/jquery-1.10.2.min.js"></script>
+    <script src="rez/js/jquery.cookie.js"></script> <!--https://github.com/carhartl/jquery-cookie -->
+    <script src="rez/js/jquery-uir-1.10.3.min.js"></script>
+    <script src="rez/js/jQDateRangeSlider-min.js"></script>
+	<script src="rez/js/jquery.simplemodal.1.4.4.min.js"></script>
+	<script src="rez/js/x2js-v1.1.3/xml2json.min.js"></script>
+	<script src="rez/js/spin.min.js"></script>
+	<script src="rez/js/prettify.js"></script>
+	<script src="rez/js/tosback2.js"></script>
+	<script src="rez/js/isocmanager.js"></script>
+    <link rel="stylesheet" href="rez/css/iThing-min.css" type="text/css" />
+	<link rel='stylesheet' href='rez/css/prettify.css' />
+	<link rel="stylesheet" href="rez/css/isocmanager.css" type="text/css"/>
+	<link rel="stylesheet" href="rez/css/style.css" type="text/css"/>
+	
+	
+<script>
+//<!--
+var site;
+var policyName;
+var doc_base_url;
+var older_policy_initial_date;
+var newer_policy_initial_date;
+var sitePolicyFolder;
+var siteDoc;
+
+var policyHistoryListLoc = new Array();
+var policyHistory = new Array();
+
+var policyTemplate = function(_idx, _snapshot, _ignore, _begin, _rule, _comment) {
+	return { idx : _idx, snapshot : _snapshot, ignore : _ignore, begin : _begin, rule : _rule, comment : _comment };
+};
+
+// extract the name and the 
+var loadData = function(policy_idx, _callafter) {
+	
+	// debug("loadData "+policy_idx);
+
+	$('#sliderMarkers').empty();
+	
+	if(null==policy_idx){
+	// single policy
+		sitePolicyFolder = siteDoc.Policies.Policy._folder;
+		policyName = siteDoc.Policies.Policy._name;
+	} else {
+	// multiple policies
+		sitePolicyFolder = siteDoc.Policies.Policy[policy_idx]._folder;
+		policyName = siteDoc.Policies.Policy[policy_idx]._name;
+	}
+	
+	$('#PolicyName').text(policyName);
+
+
+	// clear some initial vals	
+	policyHistoryListLoc = new Array();
+	policyHistory = new Array();
+
+	$('#DataHolder').empty();
+	
+	$('#DataHolder').append('<div id="SnapshotList"></div>');
+	$('#SnapshotList').load(audit_base+'domains/'+site+'/'+sitePolicyFolder+'/snapshots/', function() {						
+		var raw_html = $("#SnapshotList").html();
+		$("#SnapshotList a").each(function(item, val) {
+			var v = $(this).text();	
+			if(intRegex.test(v)) {
+				var ignore = (-1!=raw_html.indexOf(v+".ignore"));
+				var rule = (-1!=raw_html.indexOf(v+".processingrules.xml"));				
+				var begin = (-1!=raw_html.indexOf(v+".begin"));
+				var comment = (-1!=raw_html.indexOf(v+".comment"));
+				if(!ignore || (ignore && $('#ShowAllCBX').is(":checked"))) { 
+					policyHistory.push( policyTemplate( policyHistory.length, v, ignore, begin, rule, comment) );
+				}
+			}
+		});
+		
+		policyHistoryListLoc.reverse();
+		policyHistory.reverse();
+	
+		var today = new Date();
+		
+		var theBeginning = new Date(parseInt( policyHistory[policyHistory.length-1].snapshot + "000"));
+		
+		var range = today - theBeginning;
+		var perpixel = range/800.0;
+
+		// get the difference between the first and the last date
+		// subtract that value from each date
+		// given the largest value == 878 and the smallest == 0, place the dates on the line	
+		for(var i=0;i<policyHistory.length;i++) {	
+			
+			// debug(policyHistory[i]);
+			
+			var loc = parseInt(policyHistory[i].snapshot+"000") - theBeginning;		
+			var sty = ' style="margin-left:'+((loc/perpixel)+0)+'px;"';
+			var dt = $.datepicker.formatDate('M d, yy',(new Date(parseInt(policyHistory[i].snapshot+"000"))));
+			$('#sliderMarkers').append('<div class="'+(policyHistory[i].begin?'b':(policyHistory[i].ignore?'i':''))+'" id="marker'+policyHistory[i].snapshot+'" title="'+dt+'"'+sty+'>&nbsp;</div>');		
+							
+			policyHistoryListLoc[i] = parseInt(((parseFloat(loc/perpixel)/800.0)*100));
+			
+		}
+
+
+		var loc = today.getTime() - theBeginning;		
+		var sty = ' style="margin-left:'+((loc/perpixel)+0)+'px;"';
+		//var dt = $.datepicker.formatDate('M d, yy',today);
+		//$('#sliderMarkers').append('<div id="marker_today" title="'+dt+'"'+sty+'>&nbsp;</div>');		
+
+		$('#StartDate').text($.datepicker.formatDate('M d, yy',theBeginning));
+		
+		var start = 0, end = 100;
+		if(null!=older_policy_initial_date && null!=newer_policy_initial_date) {			
+			for(var i=policyHistoryListLoc.length-1;i>-1;i--) {
+				if(older_policy_initial_date==policyHistory[i].snapshot) {
+					start = policyHistoryListLoc[i];
+				}					
+				if(newer_policy_initial_date==policyHistory[i].snapshot) {
+					end = policyHistoryListLoc[i];
+				}	
+			}						
+		}
+		
+		$("#slider").dateRangeSlider({ arrows: false, bounds: {min: theBeginning,max: today}, defaultValues: { min: theBeginning, max: today }});		
+		$("#slider").dateRangeSlider("values", theBeginning, today);		
+		$("#slider").unbind("valuesChanged");	
+		$("#slider").bind("valuesChanged", function(e, data){			
+			// GET MIN
+			var min_day = data.values.min.getTime()/1000 | 0;
+			var min_policy_idx = policyHistory.length-1;
+			for(var i=0; i<policyHistory.length;i++) {
+				if(policyHistory[i].snapshot<min_day) {
+					min_policy_idx = i-1;
+					break;
+				}				
+			}			
+			// GET MAX
+			var max_day = data.values.max.getTime()/1000 | 0;
+			var max_policy_idx = 0;
+			for(var i=0; i<policyHistory.length;i++) {
+				if(policyHistory[i].snapshot<max_day) {
+					max_policy_idx = i;
+					break;
+				}				
+			}			
+			
+			if(older_policy_index!=min_policy_idx || newer_policy_index!=max_policy_idx) {
+				older_policy_index = min_policy_idx;
+				newer_policy_index = max_policy_idx;
+				renderVersions();			
+			}
+		});
+				
+		newer_policy_index = 0;
+		older_policy_index = policyHistory.length - 1;
+
+		if(_callafter) _callafter();
+		
+	});
+}
+
+
+function viewSourceOf(raw){
+	$.get( raw, function( data ) {
+		$('#source-code').empty().append('<a href="#" id="x"><img src="rez/img/x.png" onclick="$(\'#source-code\').hide();"></a>');
+		$("<pre />", {
+			"html": data.replace(/[<>]/g, function(m) { return {'<':'&lt;','>':'&gt;'}[m]}).replace(/((ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?)/gi,'<a href="$1">$1</a>'),
+			"class": "prettyprint"
+		}).appendTo("#source-code");		
+		prettyPrint();		
+		$('#source-code').show();
+	});
+return false;
+}
+
+function addMetaBox(column, title, content, snapshot, remove){
+	
+	var _metaBox = $('<div class="metaBox"/>');
+	if(remove) {
+		var 	_x = $('<img class="x_button" src="rez/img/x.png" snapshot="'+snapshot+'"/>');
+		_x.click(remove);
+		_metaBox.append(_x);
+	}
+	if(title){
+		_metaBox.append('<h3>'+title+'</h3>');
+	}
+	if(content){
+		_metaBox.append('<p>'+content+'</p>');
+	}
+		
+	column.find('.boxes').append(_metaBox);
+}
+		
+function renderVersions() {
+	
+	var from = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[older_policy_index].snapshot+"000"))))
+	var to = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[newer_policy_index].snapshot+"000"))))
+	$('#DiffedPolicy').html('<div style="padding:50px; text-align:center; font-size:20px">Comparing '+from +' to '+to+'.<br/><br/>Please wait...</div>');
+	
+	// Load differ policy
+	doc_base_url = audit_base+'domains/'+site+'/'+sitePolicyFolder+'/snapshots/'
+	
+	var doc1_url = escape(doc_base_url+policyHistory[older_policy_index].snapshot);
+	var doc2_url = escape(doc_base_url+policyHistory[newer_policy_index].snapshot);			
+	$('#DataHolder').append('<div id="DataDiffed"></div>');	
+	$('#DataDiffed').load('compare.php?a='+doc1_url+'&b='+doc2_url, function() {
+		$('#DiffedPolicy').html($('#DataDiffed').html());
+	});	
+		
+	renderColumn($('#Column1'), policyHistory[older_policy_index]);
+	renderColumn($('#Column3'), policyHistory[newer_policy_index]);
+}
+
+function analyzeSite(){
+	AccountPanel.analyzeSite(site, policyName, function(){
+		alert('analysis done!');
+	});	
+}
+
+function renderColumn(column, policy) {
+	
+	// clear out options
+	column.find('ul').empty();
+	column.find('.boxes').empty();
+	
+	// title
+	column.find('h2').html($.datepicker.formatDate('MM d, yy',(new Date(parseInt(policy.snapshot+"000")))));	
+	
+	// view raw source link
+	column.find('ul').append('<li><a href="#" class="src-link" src-url="'+ doc_base_url + policy.snapshot +'.raw">view raw src</a></li>');
+	// enable the source viewer		
+	column.find(".src-link").off();
+	column.find(".src-link").click(function(obj){ viewSourceOf($(obj.target).attr('src-url'));});
+	
+	
+	
+	// ignore policy
+	if(policy.ignore){
+		$.ajax(
+		{
+			cache:false,
+			url : doc_base_url+policy.snapshot+".ignore",
+			type: "get"
+		})
+		.done(function(d) {
+			var close_metaBox = !AccountPanel.isLoggedIn?null:function(){ 
+				AccountPanel.unmarkVersionIgnore(site, policyName, $(this).attr('snapshot'), function(){
+					policy.ignore = false;
+					renderColumn(column, policy);
+				});
+			};					
+			addMetaBox(column, 'ignored', d, policy.snapshot, close_metaBox);	
+		}); 			
+	} else if(AccountPanel.isLoggedIn) {
+		column.find('ul').append('<li><a href="#" class="ignore-link" snapshot="'+policy.snapshot+'">ignore this version</a></li>');	
+		column.find('.ignore-link').off();
+		column.find('.ignore-link').click( function(event) { 
+			var modal2 = $('<div class="modalComment"/>');
+			var modal2Form = $('<form/>');
+			modal2Form.append('<h1>Ignore Snapshot</h1><textarea name="comment"/><br/>');
+			var button = $('	<input type="button" value="Ignore This Snapshot"/>');
+			button.click(function() {
+				AccountPanel.markVersionIgnore(site, policyName, $(event.target).attr('snapshot'), this.form.comment.value, function() { policy.ignore = true; renderColumn(column, policy) } );
+				$.modal.close();
+			});
+			modal2Form.append(button);
+			modal2.append(modal2Form);
+			$.modal(modal2, {overlayClose:true, opacity:80, overlayCss: {backgroundColor:"#fff"}});
+		});
+	}	
+	
+
+	// significant departure 
+	if(policy.begin){
+		$.ajax(
+		{
+			cache:false,
+			url : doc_base_url+policy.snapshot+".begin",
+			type: "get"
+		})
+		.done(function(d) {
+			var close_metaBox = !AccountPanel.isLoggedIn?null:function(){ 
+				AccountPanel.unmarkVersionAsDeparture(site, policyName, $(this).attr('snapshot'), function(){
+					policy.begin = false;
+					renderColumn(column, policy);
+				});
+			};					
+			addMetaBox(column, 'significant departure', d, policy.snapshot, close_metaBox);	
+		}); 			
+	} else if(AccountPanel.isLoggedIn) {
+		column.find('ul').append('<li><a href="#" class="depart-link" snapshot="'+policy.snapshot+'">mark this as significant departure</a></li>');	
+		column.find('.depart-link').off();
+		column.find('.depart-link').click( function(event) { 
+			var modal2 = $('<div class="modalComment"/>');
+			var modal2Form = $('<form/>');
+			modal2Form.append('<h1>Departure</h1><textarea name="comment"/><br/>');
+			var button = $('	<input type="button" value="Mark"/>');
+			button.click(function() {
+				AccountPanel.markVersionAsDeparture(site, policyName, $(event.target).attr('snapshot'), this.form.comment.value, function() { policy.begin = true; renderColumn(column, policy) } );
+				$.modal.close();
+			});
+			modal2Form.append(button);
+			modal2.append(modal2Form);
+			$.modal(modal2, {overlayClose:true, opacity:80, overlayCss: {backgroundColor:"#fff"}});
+		});
+	}	
+		
+	
+	
+	// policy commentary
+	if(policy.comment){
+		$.ajax(
+		{
+			cache:false,
+			url : doc_base_url+policy.snapshot+".comment",
+			type: "get"
+		})
+		.done(function(d) {
+			var close_metaBox = !AccountPanel.isLoggedIn?null:function(){ 
+				AccountPanel.removeCommentary(site, policyName, $(this).attr('snapshot'), function(){
+					policy.comment = false;
+					renderColumn(column, policy);
+				});
+			};
+			addMetaBox(column, 'commentary', d, policy.snapshot, close_metaBox);
+		});			
+	} else if(AccountPanel.isLoggedIn) {
+		column.find('ul').append('<li><a href="#" class="add-comment-link" snapshot="'+policy.snapshot+'">add commentary</a></li>');	
+		column.find('.add-comment-link').off();
+		column.find('.add-comment-link').click( function(event) { 
+			var modal2 = $('<div class="modalComment"/>');
+			var modal2Form = $('<form/>');
+			modal2Form.append('<h1>Add commentary</h1><textarea name="comment"/><br/>');
+			var button = $('	<input type="button" value="Submit Comment"/>');
+			button.click(function() {
+				AccountPanel.addCommentary(site, policyName, $(event.target).attr('snapshot'), this.form.comment.value, function() { policy.comment = true; renderColumn(column, policy) } );
+				$.modal.close();
+			});
+			modal2Form.append(button);
+			modal2.append(modal2Form);
+			$.modal(modal2, {overlayClose:true, opacity:80, overlayCss: {backgroundColor:"#fff"}});
+		});
+		
+	}
+
+	// policy processing rules
+	if(AccountPanel.isLoggedIn) {
+		if(policy.rule){
+			$.ajax(
+			{
+				cache:false,
+				url : doc_base_url+policy.snapshot+".processingrules.xml",
+				type: "get"
+			})
+			.done(function(d) {				
+				var close_metaBox = function(){ 
+					AccountPanel.removeExtractionPattern(site, policyName, $(this).attr('snapshot'), function(){
+						policy.rule = false;
+						renderColumn(column, policy);
+					});
+				};
+				var escaped = escapeHtml($(d).find("Command").html());
+				escaped = escaped.replace("&lt;![CDATA[", "").replace("]]&gt;","");
+				addMetaBox(column, 'extraction pattern', "<code>"+escaped+"</code>", policy.snapshot, close_metaBox);
+			})
+			.error(function(jqXHR, textStatus, errorThrown) {			
+				if(textStatus=="parsererror"){
+					AccountPanel.removeExtractionPattern(site, policyName, policy.snapshot, function(){
+						policy.rule = false;
+						alert('The extraction pattern caused a parse error and has been removed.');					
+						renderColumn(column, policy);
+					});
+				}
+			})
+			;	
+		} else if(AccountPanel.isLoggedIn) {
+			column.find('ul').append('<li><a href="#" class="add-rule-link" snapshot="'+policy.snapshot+'">add extraction pattern</a></li>');	
+			column.find('.add-rule-link').off();
+			column.find('.add-rule-link').click( function(event) { 
+				var modal2 = $('<div class="modalComment"/>');
+				var modal2Form = $('<form/>');
+				modal2Form.append('<h1>Extraction Pattern</h1><textarea name="matchString"/><br/>');
+				var button = $('	<input type="button" value="Submit Pattern"/>');
+				button.click(function() {
+					AccountPanel.addExtractionPattern(site, policyName, $(event.target).attr('snapshot'), this.form.matchString.value, function() { policy.rule = true; renderColumn(column, policy) } );
+					$.modal.close();
+				});
+				modal2Form.append(button);
+				modal2.append(modal2Form);
+				$.modal(modal2, {overlayClose:true, opacity:80, overlayCss: {backgroundColor:"#fff"}});
+			});
+		}
+	}	
+
+	showAnalyze(true);
+
+
+} /* close renderColumn() */
+
+
+function showAnalyze(isRe){
+	$('#ReAnalyzeSite').empty();
+	if(AccountPanel.isLoggedIn){
+		var analyzeSiteLink = '<a href="#">'+(isRe?'Re-':'')+'Analyze Site</a>';
+		$('#ReAnalyzeSite').append(analyzeSiteLink);
+		$('#ReAnalyzeSite a').off();
+		$('#ReAnalyzeSite a').click( function(event) { 
+			wait.start();
+			AccountPanel.analyzeSite(site, policyName, function(){ 
+				wait.end();
+				document.location.reload();
+			});
+		});
+	}
+}
+
+
+
+var spinner_opts = {
+  lines: 13, // The number of lines to draw
+  length: 36, // The length of each line
+  width: 12, // The line thickness
+  radius: 53, // The radius of the inner circle
+  corners: 1, // Corner roundness (0..1)
+  rotate: 0, // The rotation offset
+  direction: 1, // 1: clockwise, -1: counterclockwise
+  color: '#000', // #rgb or #rrggbb or array of colors
+  speed: 1, // Rounds per second
+  trail: 60, // Afterglow percentage
+  shadow: true, // Whether to render a shadow
+  hwaccel: false, // Whether to use hardware acceleration
+  className: 'spinner', // The CSS class to assign to the spinner
+  zIndex: 2e9, // The z-index (defaults to 2000000000)
+  top: '50%', // Top position relative to parent
+  left: '50%' // Left position relative to parent
+};
+var wait = {
+	spinner:null,
+	start:function(){
+		$("body").css("overflow", "hidden");
+		$('body').append('<div id="WaitState" style="position:absolute;top:0;left:0;height:100%;right:0;z-index:1000;opacity:.8; background-color:#fff"></div>');
+		var target = document.getElementById('WaitState');
+		wait.spinner = new Spinner(spinner_opts).spin(target);					
+	},
+	end : function(){
+		wait.spinner.stop(); 
+		wait.spinner = null;
+		$("body").css("overflow", "auto");
+		$('#WaitState').remove();		
+	}
+};
+
+
+var loadSiteIndex = function(){
+	
+	var x2js = new X2JS();  
+	
+	// Load index.xml
+	$.ajax({cache:false,
+		type: "GET",
+		url: audit_base+"domains/"+site+"/index.xml",
+		dataType: "xml"}
+		)
+		.done(function (xml) {
+			siteDoc = x2js.xml2json(xml);
+						
+			if(isArray(siteDoc.Policies.Policy)){				
+			// multiple policies
+				var idx = 0;
+				var s = $('<select id="SelectPolicyPulldown"></select>');
+				for(var i=0;i<siteDoc.Policies.Policy.length;i++) {					
+					if(sitePolicyFolder==siteDoc.Policies.Policy[i]._folder) {
+						s.append($('<option selected>'+siteDoc.Policies.Policy[i]._name+'</option>'));
+						idx = i;
+					} else {
+						s.append($('<option>'+siteDoc.Policies.Policy[i]._name+'</option>'));
+					}
+				}
+				s.change(function () { loadData($("#SelectPolicyPulldown")[0].selectedIndex, renderVersions); });
+				$('#SelectPolicyForm').append(s);
+				
+				loadData(idx);
+			} else {
+			// single policy
+				$('#SelectPolicyBlock').hide();
+				loadData(null, renderVersions);
+			}
+		$('#ShowAllCBX').click( function() { if($("#SelectPolicyPulldown").length>0) loadData($("#SelectPolicyPulldown")[0].selectedIndex); else loadData(); } );
+		})
+		.error(function(xhr, status, err){
+			$('#SelectPolicyBlock').hide();
+			$('#DifferenceTable').hide();
+			showAnalyze(false);
+		});
+	
+	AccountPanel.registerForStateChange( renderVersions );
+
+	// Initialize the top links
+	//AccountPanel.i(renderVersions;
+	};	
+
+
+
+$(function(){
+	// If the page is sent the parameter "site" then the earliest and latest versions are
+	// loaded.
+	site = getParameterByName('site');
+	
+	// If the page is sent the parameter "site" then the earliest and latest versions are
+	// loaded.
+	site = getParameterByName('site');
+	
+	// Otherwise, load the versions specified by a comparison request which is in the form:
+	// [URL_TO_THIS_SCRIPT]?a=http[s]://[AUDIT_SERVER]/[AUDIT_BASE]/domains/[AUDITED_DOMAIN_NAME]/[POLICY_NAME]/snapshots/[INT_TIMESTAMP]&b=http[s]://[AUDIT_SERVER]/[AUDIT_BASE]/domains/[AUDITED_DOMAIN_NAME]/[POLICY_NAME]/snapshots/[INT_TIMESTAMP]
+	// from which the site and versions are extracted
+	if('' == site) {
+		var a = getParameterByName('a');
+		var b = getParameterByName('b');
+		if(''!=a && ''!=b) {
+			newer_policy_initial_date = a.substring(a.lastIndexOf("/")+1);
+			older_policy_initial_date = b.substring(b.lastIndexOf("/")+1);
+			var loc_of_domains = a.indexOf("/domains/");
+			var next_slash = a.indexOf("/",loc_of_domains+9);
+			if(-1!=loc_of_domains && -1!=next_slash) {
+				site = a.substring(loc_of_domains+9, next_slash);
+				sitePolicyFolder = a.substring(next_slash+1, a.indexOf('/snapshots/'));
+			}
+		}
+	}	
+	
+	
+	$('#CompanyLogo img').attr('src', 'rez/img/ico/'+site+'.ico').error(function() {			
+		$(this).attr('src', 'rez/img/ico/default.ico');
+	});	
+	$('#CompanyName').text(site);
+	$('#CompanyName2').text(site);
+	
+	document.title = 'TOSBack2 Policy Detail for ' + site;
+	
+	// Initialize the top links
+	AccountPanel.i(loadSiteIndex);
+});
+
+</script>  
+  
+</head>
+<body>
+<div id="container" style="position:relative;">
+
+	<div id="page">
+	
+		<div id="header">
+			<div id="headerInner"><h1>TOSback<sup>2</sup></h1></div>
+		</div>	
+		
+		<div id="main" style="width:1200px">
+
+			<div id="content">
+	
+				<div id="pageNav">    
+					<a href="index.html">TOSback Home</a> / <span id="CompanyName2">[COMPANY NAME]</span>    
+				</div>
+			
+				
+				<div id="CompanyDetails">
+					<div class="companyLogo" id="CompanyLogo"><img /></div>
+					<div class="companyName" id="CompanyName">[COMPANY NAME]</div>
+					<span id="ReAnalyzeSite"></span>
+					<div class="differenceValue" id="SelectPolicyBlock" style="width:150px;"> Select policy document:<br /><br />
+						<form id="SelectPolicyForm"></form>
+					</div>    
+				</div>
+						
+				<div id="DifferenceTable">   
+
+					<div id="Info">					
+						<h1 id="PolicyName"></h1>	
+						<div id="Comparing"></div>					
+						<div id="sliderContainer">
+							<div id="slider"></div>
+							<div id="sliderMarkers" style="margin-left:15px;position:absolute; top:40px;"></div>
+						</div>
+						<div id="showAllContainer">Red indicates a minor change. Blue indicates a significant change which makes diff comparison across this boundary impossible. <input type="checkbox" id="ShowAllCBX">Display ignored versions (gray).</div>
+					</div>
+					<!-- end Info -->
+					
+					<!-- ColumnsContainer -->
+					<div id="ColumnsContainer">      
+						<div id="Column1" class="policyInfo">							
+							<h2></h2>
+							<ul><li class="view_raw_source_link"></li></ul>	
+							<div class="boxes"></div>																							
+						</div>						
+						<div id="Column2">            
+							<div id="DiffedPolicy"></div>            
+						</div>						
+						<div id="Column3" class="policyInfo">								
+							<h2></h2>
+							<ul><li class="view_raw_source_link"></li></ul>	
+							<div class="boxes"></div>
+						</div>						
+					</div> 
+					<!-- end ColumnsContainer -->
+										
+				</div>        				
+				<!-- end DifferenceTable  -->
+
+
+			</div>
+			<!-- end content -->
+			
+			<div class="clear"></div>
+			
+		</div>
+		<!--end main-->
+		
+		<div class="clear"></div>	
+		
+	</div>
+	<!-- end page -->
+	
+	<div class="clear"></div>		
+
+	<div id="Scratch" style="display:none;position:absolute;"></div>
+	<div id="DataHolder" class="hidden" style="display:none;position:absolute;"></div>
+
+</div> 
+<!-- end container -->   
+
+<div class="clear"></div>
+
+<div id="footer" style="">
+	<div id="footerarea"><span>&copy; 2014.  All rights reserved.</span></div>
+	<div id="LogoContainer">
+		<a href="https://eff.org"><img src="rez/img/eff-logo-plain-rgb.png" /></a>
+		<a href="https://isoc.org"><img src="rez/img/isoc_logo_rgbblue_tp.png"/></a>
+	</div>
+</div>
+
+ 
+<div style="text-align:left"><div id="source-code"></div></div> 
+	   
+</body>
+</html>

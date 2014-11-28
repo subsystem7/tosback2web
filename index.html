@@ -1,0 +1,145 @@
+<html xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="en-US">
+<head profile="http://gmpg.org/xfn/11">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>TOSback 2</title>
+
+	<script src="rez/js/jquery-1.10.2.min.js"></script>
+	<script src="rez/js/jquery.cookie.js"></script> <!--https://github.com/carhartl/jquery-cookie -->
+	<script src="rez/js/jquery-uir-1.10.3.min.js"></script>
+
+	<script src="rez/js/sites.js" type="text/javascript"></script>
+	<script src="rez/js/tosback2.js"></script>
+	<script src="rez/js/isocmanager.js"></script>
+	
+	<link rel="stylesheet" href="rez/css/isocmanager.css" type="text/css"/>
+	<link rel="stylesheet" href="rez/css/style.css" type="text/css"/>
+</head>
+<body>
+<div id="container">
+
+	<div id="page">
+		<div id="header"><div id="headerInner"><h1>TOSback<sup>2</sup></h1></div></div>
+    
+		<div id="main">
+		
+			<div id="content">       
+		
+				<div id="pageIntro">
+					<h2>About TOSback</h2>
+					<p>TOSback tracks privacy policies and provides tools to visualize changes and improve understanding.</p>
+				</div>        
+				<div class="pageHeader">Select a policy to view:</div>
+				<div id="ViewBlock" class="pageModule">         
+					<div id="TheList"></div>
+					<div></div>            
+				</div>        
+        
+        
+<!-- pull a list of privacy documents and display along with basic icons --> 
+<script>
+$(function() {
+	var theList = $('#TheList');
+	$(sites.sitename).each(function(num, a_site) {	
+		var docs = " (";
+		if(isArray(a_site.data.Policy)) {
+			for(var j=0;j<a_site.data.Policy.length;j++) {
+				if(j>0) docs += ", ";
+				docs += a_site.data.Policy[j]['@attributes'].name;
+			}
+		} else {
+			docs += a_site.data.Policy['@attributes'].name;
+		}
+		docs += ")";
+		theList.append('<div id="item'+num+'" target="detail.html?site='+a_site.name+'"><img id="ico'+num+'" width="16" height="16">'+a_site.name+docs+'</div>');
+		$("#item"+num).click(function() {
+			window.location = $(this).attr('target');
+		});
+		$('#ico'+num).attr('src', 'rez/img/ico/'+a_site.name+'.ico').error(function() {			
+			$(this).attr('src', 'rez/img/ico/default.ico');
+		});
+	});	
+	
+	$('#ViewBlock').append(	$('<input id="FilterList" placeholder="Search...">').keyup(function() { 
+			var filter = $(this).val();
+			if(filter){
+				if(filter.length>1){
+					theList.children("div:not(:Contains(" + filter + "))").hide();
+					theList.children("div:Contains(" + filter + ")").show(); 
+				}
+			} else {
+				theList.children("div").show();
+			}
+		})
+	);
+
+	AccountPanel.i();
+	
+	$('#SuggestionForm').submit(function(event){
+		event.preventDefault();
+		var data = $(event.target).serialize();
+		$(event.target).find('input:text').val("");
+		$.ajax({
+			url : AccountPanel.baseRequestUrl+"/site/suggest",
+			type: "post",
+			data: data,
+			success: function(d) {
+				console.log(d);
+				alert("Thank you for your suggestion!");
+			}
+		}); 		
+		return false;
+	});	
+});
+</script>
+
+
+      
+
+				<h3>Suggest a Policy</h3>
+				<p>Enter the URL to a Privacy Policy or Terms of Service Agreement that you would like us to track.  We will review your submission and add
+				it to the TOSBack2 tracker as soon as possible.</p>
+				<form id="SuggestionForm">
+					<p><input type="text" placeholder="Your Full Name (optional)" name="fullname" style="width:30%">	</p>
+					<p><input type="text" placeholder="Your E-mail Address (optional)" name="email" style="width:30%"></p>
+					<p><input placeholder="Paste the URL to the policy document here that you would like us to track here" type="text" style="width:70%;" name="tos"></p>
+					<p><input type="submit" value="Suggest">
+				</form>
+				
+
+
+				<h3>The Audit Archive</h3>
+				<p>Since TOSBack version 1, The Internet Society (ISOC) has been providing a human and machine readable folder set containing snapshots 
+				of the policies that are crawled for changes.</p>
+				<p>&rarr; <script>document.write('<a href="' + audit_base + 'full_archive.zip">Download Full Audit Archive</a>');</script></p>
+
+
+
+				<h3>Our Source Code</h3>
+				<p>The source code for the scripts that generate the audit folders from EFF's TOSBack2 git repository and make this web interface possible, are all available on github.</p>
+				<p>&rarr; <a href="#" onclick="alert('Waiting for github link.'); return false;">View on github</a></p>
+				<p>&nbsp;</p>
+
+
+
+			</div>
+			<!-- end content -->
+			
+		</div>
+		<!--end main-->
+				
+	</div>
+	<!-- end page -->		
+		
+	<div id="footer">
+		<div id="footerarea"><span>&copy; 2014.  All rights reserved.</span></div>
+		<div id="LogoContainer">
+			<a href="https://eff.org"><img src="rez/img/eff-logo-plain-rgb.png" /></a>
+			<a href="https://isoc.org"><img src="rez/img/isoc_logo_rgbblue_tp.png"/></a>
+		</div>
+	</div>
+
+</div> 
+<!-- end container -->    
+
+</body>
+</html>
