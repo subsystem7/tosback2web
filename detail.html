@@ -13,6 +13,7 @@
 	<script src="rez/js/jquery.simplemodal.1.4.4.min.js"></script>
 	<script src="rez/js/x2js-v1.1.3/xml2json.min.js"></script>
 	<script src="rez/js/spin.min.js"></script>
+	<script src="rez/js/moment.js"></script>
 	<script src="rez/js/prettify.js"></script>
 	<script src="rez/js/tosback2.js"></script>
 	<script src="rez/js/isocmanager.js"></script>
@@ -35,8 +36,16 @@ var siteDoc;
 var policyHistoryListLoc = new Array();
 var policyHistory = new Array();
 
-var policyTemplate = function(_idx, _snapshot, _ignore, _begin, _rule, _comment) {
-	return { idx : _idx, snapshot : _snapshot, ignore : _ignore, begin : _begin, rule : _rule, comment : _comment };
+var policyTemplate = function(_idx, _snapshot, _ignore, _begin, _rule, _comment, _m) {
+	return { 
+		idx : _idx, 
+		snapshot : _snapshot, 
+		ignore : _ignore, 
+		begin : _begin, 
+		rule : _rule, 
+		comment : _comment, 
+		m:_m 
+	};
 };
 
 // extract the name and the 
@@ -70,13 +79,15 @@ var loadData = function(policy_idx, _callafter) {
 		var raw_html = $("#SnapshotList").html();
 		$("#SnapshotList a").each(function(item, val) {
 			var v = $(this).text();	
-			if(intRegex.test(v)) {
+			var m = moment(v, "YYYYMMDDTHHmmssZZZ");
+			//if(intRegex.test(v)) {
+			if(v.length==20 && m.isValid()) {
 				var ignore = (-1!=raw_html.indexOf(v+".ignore"));
 				var rule = (-1!=raw_html.indexOf(v+".processingrules.xml"));				
 				var begin = (-1!=raw_html.indexOf(v+".begin"));
 				var comment = (-1!=raw_html.indexOf(v+".comment"));
 				if(!ignore || (ignore && $('#ShowAllCBX').is(":checked"))) { 
-					policyHistory.push( policyTemplate( policyHistory.length, v, ignore, begin, rule, comment) );
+					policyHistory.push( policyTemplate( policyHistory.length, v, ignore, begin, rule, comment, m) );
 				}
 			}
 		});
@@ -85,9 +96,7 @@ var loadData = function(policy_idx, _callafter) {
 		policyHistory.reverse();
 	
 		var today = new Date();
-		
-		var theBeginning = new Date(parseInt( policyHistory[policyHistory.length-1].snapshot + "000"));
-		
+		var theBeginning = new Date(parseInt( policyHistory[policyHistory.length-1].m.unix() + "000"));		
 		var range = today - theBeginning;
 		var perpixel = range/800.0;
 
@@ -97,10 +106,12 @@ var loadData = function(policy_idx, _callafter) {
 		for(var i=0;i<policyHistory.length;i++) {	
 			
 			// debug(policyHistory[i]);
-			
-			var loc = parseInt(policyHistory[i].snapshot+"000") - theBeginning;		
+			//EPOCH
+			var loc = parseInt(policyHistory[i].m.unix()+"000") - theBeginning;		
 			var sty = ' style="margin-left:'+((loc/perpixel)+0)+'px;"';
-			var dt = $.datepicker.formatDate('M d, yy',(new Date(parseInt(policyHistory[i].snapshot+"000"))));
+			//EPOCH
+			var dt = $.datepicker.formatDate('M d, yy',(new Date(parseInt(policyHistory[i].m.unix()+"000"))));
+			
 			$('#sliderMarkers').append('<div class="'+(policyHistory[i].begin?'b':(policyHistory[i].ignore?'i':''))+'" id="marker'+policyHistory[i].snapshot+'" title="'+dt+'"'+sty+'>&nbsp;</div>');		
 							
 			policyHistoryListLoc[i] = parseInt(((parseFloat(loc/perpixel)/800.0)*100));
@@ -118,10 +129,10 @@ var loadData = function(policy_idx, _callafter) {
 		var start = 0, end = 100;
 		if(null!=older_policy_initial_date && null!=newer_policy_initial_date) {			
 			for(var i=policyHistoryListLoc.length-1;i>-1;i--) {
-				if(older_policy_initial_date==policyHistory[i].snapshot) {
+				if(older_policy_initial_date==policyHistory[i].m.unix()) {
 					start = policyHistoryListLoc[i];
 				}					
-				if(newer_policy_initial_date==policyHistory[i].snapshot) {
+				if(newer_policy_initial_date==policyHistory[i].m.unix()) {
 					end = policyHistoryListLoc[i];
 				}	
 			}						
@@ -135,7 +146,7 @@ var loadData = function(policy_idx, _callafter) {
 			var min_day = data.values.min.getTime()/1000 | 0;
 			var min_policy_idx = policyHistory.length-1;
 			for(var i=0; i<policyHistory.length;i++) {
-				if(policyHistory[i].snapshot<min_day) {
+				if(policyHistory[i].m.unix()<min_day) {
 					min_policy_idx = i-1;
 					break;
 				}				
@@ -144,7 +155,7 @@ var loadData = function(policy_idx, _callafter) {
 			var max_day = data.values.max.getTime()/1000 | 0;
 			var max_policy_idx = 0;
 			for(var i=0; i<policyHistory.length;i++) {
-				if(policyHistory[i].snapshot<max_day) {
+				if(policyHistory[i].m.unix()<max_day) {
 					max_policy_idx = i;
 					break;
 				}				
@@ -199,8 +210,8 @@ function addMetaBox(column, title, content, snapshot, remove){
 		
 function renderVersions() {
 	
-	var from = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[older_policy_index].snapshot+"000"))))
-	var to = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[newer_policy_index].snapshot+"000"))))
+	var from = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[older_policy_index].m.unix()+"000"))))
+	var to = $.datepicker.formatDate('MM d, yy',(new Date(parseInt(policyHistory[newer_policy_index].m.unix()+"000"))))
 	$('#DiffedPolicy').html('<div style="padding:50px; text-align:center; font-size:20px">Comparing '+from +' to '+to+'.<br/><br/>Please wait...</div>');
 	
 	// Load differ policy
@@ -230,7 +241,7 @@ function renderColumn(column, policy) {
 	column.find('.boxes').empty();
 	
 	// title
-	column.find('h2').html($.datepicker.formatDate('MM d, yy',(new Date(parseInt(policy.snapshot+"000")))));	
+	column.find('h2').html($.datepicker.formatDate('MM d, yy',(new Date(parseInt(policy.m.unix()+"000")))));	
 	
 	// view raw source link
 	column.find('ul').append('<li><a href="#" class="src-link" src-url="'+ doc_base_url + policy.snapshot +'.raw">view raw src</a></li>');
